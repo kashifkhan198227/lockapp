@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LockApp" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="description" content="A beautiful PIN lock screen app" />
+  <title>LockApp</title>
+
+  <!-- Inline Web App Manifest as data URI -->
+  <link rel="manifest" href="data:application/manifest+json,{
+    %22name%22:%22LockApp%22,
+    %22short_name%22:%22LockApp%22,
+    %22description%22:%22PIN Lock Screen App%22,
+    %22start_url%22:%22.%22,
+    %22display%22:%22standalone%22,
+    %22background_color%22:%22%230a0a0f%22,
+    %22theme_color%22:%22%230a0a0f%22,
+    %22orientation%22:%22portrait%22,
+    %22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%230a0a0f'/%3E%3Crect x='156' y='200' width='200' height='220' rx='20' fill='%237c6aff'/%3E%3Cellipse cx='256' cy='190' rx='70' ry='80' fill='none' stroke='%237c6aff' stroke-width='28'/%3E%3Ccircle cx='256' cy='310' r='22' fill='%230a0a0f'/%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22,%22purpose%22:%22any maskable%22}]
+  }" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #0a0a0f;
+      --border: rgba(255,255,255,0.06);
+      --accent: #7c6aff;
+      --accent2: #ff6ab0;
+      --text: #e8e8f0;
+      --muted: rgba(232,232,240,0.35);
+      --key-bg: rgba(255,255,255,0.05);
+      --key-hover: rgba(124,106,255,0.18);
+      --key-active: rgba(124,106,255,0.38);
+      --error: #ff4f6a;
+      --success: #4fddaa;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* Ambient blobs */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(70px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 {
+      width: 320px; height: 320px;
+      background: radial-gradient(circle, rgba(124,106,255,0.2), transparent 70%);
+      top: -80px; left: -100px;
+      animation: drift 8s ease-in-out infinite alternate;
+    }
+    .blob-2 {
+      width: 240px; height: 240px;
+      background: radial-gradient(circle, rgba(255,106,176,0.13), transparent 70%);
+      bottom: 60px; right: -70px;
+      animation: drift 11s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes drift {
+      from { transform: translate(0,0); }
+      to { transform: translate(20px,18px); }
+    }
+
+    /* App wrapper — fills full screen on mobile */
+    #app {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 430px;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* Status bar */
+    .status-bar {
+      width: 100%;
+      padding: env(safe-area-inset-top, 14px) 24px 0;
+      padding-top: max(env(safe-area-inset-top), 14px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .status-time {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .status-icons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      opacity: 0.65;
+    }
+    .status-icons svg { width: 16px; height: 16px; fill: var(--text); }
+
+    /* Main lock body */
+    .lock-body {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px max(env(safe-area-inset-bottom), 28px);
+    }
+
+    /* DateTime */
+    .datetime { text-align: center; }
+    .big-time {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(56px, 18vw, 80px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, #fff 30%, rgba(255,255,255,0.45));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .big-date {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* Notification */
+    .notif-pill {
+      background: rgba(255,255,255,0.055);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 11px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      backdrop-filter: blur(12px);
+    }
+    .notif-icon {
+      width: 34px; height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .notif-text { flex: 1; }
+    .notif-app { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .notif-msg { font-size: 13px; color: var(--text); margin-top: 2px; font-family: 'Syne', sans-serif; font-weight: 600; }
+    .notif-time { font-size: 10px; color: var(--muted); }
+
+    /* PIN section */
+    .pin-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .pin-label {
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .pin-dots {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      height: 20px;
+    }
+    .pin-dot {
+      width: 13px; height: 13px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.18);
+      transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .pin-dot.filled { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(124,106,255,0.55); transform: scale(1.15); }
+    .pin-dot.error  { background: var(--error);  border-color: var(--error);  box-shadow: 0 0 10px rgba(255,79,106,0.5); }
+    .pin-dot.success{ background: var(--success); border-color: var(--success); box-shadow: 0 0 10px rgba(79,221,170,0.5); }
+
+    @keyframes shake {
+      0%,100%{ transform: translateX(0); }
+      20%{ transform: translateX(-9px); }
+      40%{ transform: translateX(9px); }
+      60%{ transform: translateX(-5px); }
+      80%{ transform: translateX(5px); }
+    }
+    .shake { animation: shake 0.42s ease; }
+
+    /* Keypad */
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+    .key {
+      background: var(--key-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      height: clamp(58px, 14vw, 72px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .key:active {
+      background: var(--key-active);
+      border-color: rgba(124,106,255,0.55);
+      transform: scale(0.93);
+      box-shadow: 0 0 18px rgba(124,106,255,0.22);
+    }
+    .key-num {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(20px, 5.5vw, 26px);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .key-letters {
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .key-empty { background: transparent !important; border-color: transparent !important; pointer-events: none; }
+    .key-delete .key-num { font-size: clamp(16px, 4vw, 20px); color: var(--accent); }
+
+    /* Ripple */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(124,106,255,0.22);
+      transform: scale(0);
+      animation: rippleOut 0.5s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes rippleOut { to { transform: scale(4.5); opacity: 0; } }
+
+    /* Bottom hint */
+    .bottom-hint {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-align: center;
+      min-height: 16px;
+    }
+    .bottom-hint.err { color: var(--error); }
+
+    /* Unlocked screen */
+    .unlocked-screen {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      animation: fadeUp 0.55s ease forwards;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .unlock-icon {
+      width: 80px; height: 80px;
+      background: linear-gradient(135deg, var(--success), #00bfa5);
+      border-radius: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px;
+      box-shadow: 0 0 48px rgba(79,221,170,0.38);
+      animation: popIn 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    .unlock-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    .unlock-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.12em; }
+    .relock-btn {
+      margin-top: 10px;
+      background: var(--key-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 36px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .relock-btn:active { background: var(--key-hover); transform: scale(0.97); }
+
+    /* Install banner */
+    #install-banner {
+      position: fixed;
+      bottom: max(env(safe-area-inset-bottom), 16px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(18,18,26,0.95);
+      border: 1px solid rgba(124,106,255,0.4);
+      border-radius: 16px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: calc(100vw - 32px);
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateX(-50%) translateY(80px); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+    }
+    .banner-icon { font-size: 28px; }
+    .banner-text { flex: 1; }
+    .banner-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); }
+    .banner-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; }
+    .banner-btns  { display: flex; gap: 8px; }
+    .btn-install {
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-dismiss {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    /* iOS install tip */
+    #ios-tip {
+      position: fixed;
+      bottom: max(env(safe-area-inset-bottom), 16px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(18,18,26,0.95);
+      border: 1px solid rgba(124,106,255,0.35);
+      border-radius: 16px;
+      padding: 16px 20px;
+      max-width: calc(100vw - 32px);
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      text-align: center;
+      animation: slideUp 0.4s ease;
+    }
+    #ios-tip p { font-size: 12px; color: var(--text); line-height: 1.6; letter-spacing: 0.04em; }
+    #ios-tip span { color: var(--accent); font-weight: 600; }
+    #ios-tip button {
+      margin-top: 12px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 20px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    /* Unlock pulse */
+    @keyframes unlockPulse {
+      0%   { box-shadow: 0 0 0 rgba(79,221,170,0); }
+      50%  { box-shadow: 0 0 60px rgba(79,221,170,0.25); }
+      100% { box-shadow: 0 0 0 rgba(79,221,170,0); }
+    }
+    .unlocking { animation: unlockPulse 0.5s ease; }
+  </style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div id="app">
+  <div class="status-bar">
+    <span class="status-time" id="status-clock">00:00</span>
+    <div class="status-icons">
+      <svg viewBox="0 0 24 24"><path d="M1.5 8.5C5.4 4.6 10 3 12 3s6.6 1.6 10.5 5.5L21 10c-3.3-3.3-6.6-5-9-5s-5.7 1.7-9 5L1.5 8.5zM4.5 11.5C7.2 8.8 9.6 7 12 7s4.8 1.8 7.5 4.5L18 13c-2.1-2.1-4-3-6-3s-3.9.9-6 3L4.5 11.5zM7.5 14.5C9.1 12.9 10.5 12 12 12s2.9.9 4.5 2.5L15 16c-1-1-1.9-2-3-2s-2 1-3 2L7.5 14.5zM12 17a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.34C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+    </div>
+  </div>
+
+  <!-- LOCK SCREEN -->
+  <div id="lock-screen" class="lock-body">
+    <div class="datetime">
+      <div class="big-time" id="main-clock">00:00</div>
+      <div class="big-date" id="main-date">Sunday, April 19</div>
+    </div>
+
+    <div class="notif-pill">
+      <div class="notif-icon">🔔</div>
+      <div class="notif-text">
+        <div class="notif-app">Messages</div>
+        <div class="notif-msg">Hey, are you free tonight?</div>
+      </div>
+      <div class="notif-time">now</div>
+    </div>
+
+    <div class="pin-section">
+      <div class="pin-label">Enter PIN</div>
+      <div class="pin-dots" id="pin-dots">
+        <div class="pin-dot" id="dot-0"></div>
+        <div class="pin-dot" id="dot-1"></div>
+        <div class="pin-dot" id="dot-2"></div>
+        <div class="pin-dot" id="dot-3"></div>
+      </div>
+
+      <div class="keypad" id="keypad">
+        <div class="key" data-key="1"><span class="key-num">1</span></div>
+        <div class="key" data-key="2"><span class="key-num">2</span><span class="key-letters">ABC</span></div>
+        <div class="key" data-key="3"><span class="key-num">3</span><span class="key-letters">DEF</span></div>
+        <div class="key" data-key="4"><span class="key-num">4</span><span class="key-letters">GHI</span></div>
+        <div class="key" data-key="5"><span class="key-num">5</span><span class="key-letters">JKL</span></div>
+        <div class="key" data-key="6"><span class="key-num">6</span><span class="key-letters">MNO</span></div>
+        <div class="key" data-key="7"><span class="key-num">7</span><span class="key-letters">PQRS</span></div>
+        <div class="key" data-key="8"><span class="key-num">8</span><span class="key-letters">TUV</span></div>
+        <div class="key" data-key="9"><span class="key-num">9</span><span class="key-letters">WXYZ</span></div>
+        <div class="key key-empty"></div>
+        <div class="key" data-key="0"><span class="key-num">0</span></div>
+        <div class="key key-delete" id="delete-key"><span class="key-num">⌫</span></div>
+      </div>
+
+      <div class="bottom-hint" id="hint">hint: 1234</div>
+    </div>
+  </div>
+
+  <!-- UNLOCKED SCREEN (hidden initially) -->
+  <div id="unlocked-screen" class="unlocked-screen" style="display:none;">
+    <div class="unlock-icon">🔓</div>
+    <div class="unlock-title">Unlocked</div>
+    <div class="unlock-sub">ACCESS GRANTED</div>
+    <button class="relock-btn" id="relock-btn">LOCK AGAIN</button>
+  </div>
+</div>
+
+<!-- Android Install Banner -->
+<div id="install-banner" style="display:none;">
+  <div class="banner-icon">🔐</div>
+  <div class="banner-text">
+    <div class="banner-title">Install LockApp</div>
+    <div class="banner-sub">Add to home screen for app experience</div>
+  </div>
+  <div class="banner-btns">
+    <button class="btn-install" id="btn-install">Install</button>
+    <button class="btn-dismiss" id="btn-dismiss">✕</button>
+  </div>
+</div>
+
+<!-- iOS Install Tip -->
+<div id="ios-tip" style="display:none;">
+  <p>To install: tap <span>Share ↑</span> then<br><span>"Add to Home Screen"</span></p>
+  <button id="ios-dismiss">Got it</button>
+</div>
+
+<script>
+  const CORRECT_PIN = "1234";
+  const PIN_LENGTH = 4;
+  let pin = "";
+  let locked = true;
+  let busy = false;
+
+  // ── Clock ──────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    const t = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const d = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    document.getElementById("status-clock").textContent = t;
+    document.getElementById("main-clock").textContent = t;
+    document.getElementById("main-date").textContent = d;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── PIN dots ───────────────────────────────────────────
+  function renderDots(state) {
+    for (let i = 0; i < PIN_LENGTH; i++) {
+      const dot = document.getElementById("dot-" + i);
+      dot.className = "pin-dot";
+      if (i < pin.length) dot.classList.add(state || "filled");
+    }
+  }
+
+  // ── Ripple ─────────────────────────────────────────────
+  function addRipple(el, e) {
+    const r = document.createElement("span");
+    const rect = el.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left - size / 2;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top  - size / 2;
+    r.className = "ripple";
+    r.style.cssText = `width:${size}px;height:${size}px;left:${cx}px;top:${cy}px`;
+    el.appendChild(r);
+    setTimeout(() => r.remove(), 520);
+  }
+
+  // ── Handle digit press ────────────────────────────────
+  function pressDigit(digit, el, e) {
+    if (!locked || busy) return;
+    if (pin.length >= PIN_LENGTH) return;
+    addRipple(el, e);
+    pin += digit;
+    renderDots();
+
+    if (pin.length === PIN_LENGTH) {
+      busy = true;
+      setTimeout(() => {
+        if (pin === CORRECT_PIN) {
+          renderDots("success");
+          document.getElementById("app").classList.add("unlocking");
+          setTimeout(showUnlocked, 500);
+        } else {
+          renderDots("error");
+          document.getElementById("hint").textContent = "✕  Incorrect PIN — try again";
+          document.getElementById("hint").classList.add("err");
+          const dotsEl = document.getElementById("pin-dots");
+          dotsEl.classList.add("shake");
+          setTimeout(() => {
+            dotsEl.classList.remove("shake");
+            pin = "";
+            renderDots();
+            document.getElementById("hint").textContent = "hint: 1234";
+            document.getElementById("hint").classList.remove("err");
+            busy = false;
+          }, 700);
+        }
+      }, 100);
+    }
+  }
+
+  // ── Delete ─────────────────────────────────────────────
+  function pressDelete(el, e) {
+    if (!locked || busy) return;
+    addRipple(el, e);
+    pin = pin.slice(0, -1);
+    renderDots();
+    document.getElementById("hint").textContent = "hint: 1234";
+    document.getElementById("hint").classList.remove("err");
+  }
+
+  // ── Show unlocked ─────────────────────────────────────
+  function showUnlocked() {
+    locked = false;
+    document.getElementById("lock-screen").style.display = "none";
+    document.getElementById("unlocked-screen").style.display = "flex";
+    // Vibrate on unlock
+    if (navigator.vibrate) navigator.vibrate([50, 30, 80]);
+  }
+
+  // ── Relock ────────────────────────────────────────────
+  document.getElementById("relock-btn").addEventListener("click", () => {
+    locked = true;
+    busy = false;
+    pin = "";
+    renderDots();
+    document.getElementById("unlocked-screen").style.display = "none";
+    document.getElementById("lock-screen").style.display = "flex";
+    document.getElementById("app").classList.remove("unlocking");
+  });
+
+  // ── Keypad events ─────────────────────────────────────
+  document.getElementById("keypad").addEventListener("click", (e) => {
+    const key = e.target.closest(".key[data-key]");
+    if (key) pressDigit(key.dataset.key, key, e);
+  });
+  document.getElementById("keypad").addEventListener("touchstart", (e) => {
+    const key = e.target.closest(".key[data-key]");
+    if (key) pressDigit(key.dataset.key, key, e);
+  }, { passive: true });
+
+  document.getElementById("delete-key").addEventListener("click",      (e) => pressDelete(e.currentTarget, e));
+  document.getElementById("delete-key").addEventListener("touchstart",  (e) => pressDelete(e.currentTarget, e), { passive: true });
+
+  // ── PWA: Service Worker ───────────────────────────────
+  if ("serviceWorker" in navigator) {
+    const swCode = `
+      const CACHE = "lockapp-v1";
+      const ASSETS = [self.location.href];
+      self.addEventListener("install", e => {
+        e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+        self.skipWaiting();
+      });
+      self.addEventListener("activate", e => {
+        e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
+        self.clients.claim();
+      });
+      self.addEventListener("fetch", e => {
+        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+      });
+    `;
+    const blob = new Blob([swCode], { type: "application/javascript" });
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).catch(() => {});
+  }
+
+  // ── PWA: Install prompt (Android Chrome) ──────────────
+  let deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const banner = document.getElementById("install-banner");
+    // Only show if not already installed
+    if (!window.matchMedia("(display-mode: standalone)").matches) {
+      banner.style.display = "flex";
+    }
+  });
+
+  document.getElementById("btn-install").addEventListener("click", () => {
+    document.getElementById("install-banner").style.display = "none";
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+    }
+  });
+  document.getElementById("btn-dismiss").addEventListener("click", () => {
+    document.getElementById("install-banner").style.display = "none";
+  });
+
+  // ── PWA: iOS tip ──────────────────────────────────────
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  const shownTip = sessionStorage.getItem("ios-tip-shown");
+  if (isIOS && !isStandalone && !shownTip) {
+    setTimeout(() => {
+      document.getElementById("ios-tip").style.display = "block";
+      sessionStorage.setItem("ios-tip-shown", "1");
+    }, 2000);
+  }
+  document.getElementById("ios-dismiss").addEventListener("click", () => {
+    document.getElementById("ios-tip").style.display = "none";
+  });
+</script>
+</body>
+</html>
