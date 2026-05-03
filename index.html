@@ -11,18 +11,7 @@
   <meta name="description" content="A beautiful PIN lock screen app" />
   <title>LockApp</title>
 
-  <!-- Inline Web App Manifest as data URI -->
-  <link rel="manifest" href="data:application/manifest+json,{
-    %22name%22:%22LockApp%22,
-    %22short_name%22:%22LockApp%22,
-    %22description%22:%22PIN Lock Screen App%22,
-    %22start_url%22:%22.%22,
-    %22display%22:%22standalone%22,
-    %22background_color%22:%22%230a0a0f%22,
-    %22theme_color%22:%22%230a0a0f%22,
-    %22orientation%22:%22portrait%22,
-    %22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%230a0a0f'/%3E%3Crect x='156' y='200' width='200' height='220' rx='20' fill='%237c6aff'/%3E%3Cellipse cx='256' cy='190' rx='70' ry='80' fill='none' stroke='%237c6aff' stroke-width='28'/%3E%3Ccircle cx='256' cy='310' r='22' fill='%230a0a0f'/%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22,%22purpose%22:%22any maskable%22}]
-  }" />
+  <link rel="manifest" href="manifest.json" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -637,24 +626,7 @@
 
   // ── PWA: Service Worker ───────────────────────────────
   if ("serviceWorker" in navigator) {
-    const swCode = `
-      const CACHE = "lockapp-v1";
-      const ASSETS = [self.location.href];
-      self.addEventListener("install", e => {
-        e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-        self.skipWaiting();
-      });
-      self.addEventListener("activate", e => {
-        e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
-        self.clients.claim();
-      });
-      self.addEventListener("fetch", e => {
-        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
-      });
-    `;
-    const blob = new Blob([swCode], { type: "application/javascript" });
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).catch(() => {});
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
 
   // ── PWA: Install prompt (Android Chrome) ──────────────
